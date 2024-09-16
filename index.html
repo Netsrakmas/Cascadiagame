@@ -1,13 +1,33 @@
-<!-- ... (Existing code remains unchanged) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cascadia Simplified</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Ensures mobile compatibility -->
+    <link rel="stylesheet" href="styles.css"> <!-- Link to the CSS file -->
+</head>
 <body>
     <h1>Cascadia Simplified</h1>
+
+    <!-- Game Container for Board and Sidebar -->
     <div id="game-container">
+        <!-- Game Board -->
         <div id="board"></div>
+
+        <!-- Sidebar for Draft Area, Score, and Player Info -->
         <div id="sidebar">
-            <h2>Player <span id="player-number">1</span>'s Turn</h2>
-            <!-- ... (Rest of the sidebar) -->
-            <h2>Score: <span id="score">0</span></h2>
+            <h2>Player <span id="player-number">1</span>'s Turn</h2> <!-- Displays current player -->
+
+            <h2>Available Tiles and Tokens</h2>
+            <div id="draft-area"></div> <!-- This is where draft tiles and tokens will be shown -->
+
+            <button id="end-turn">End Turn</button> <!-- Button to end the player's turn -->
+
+            <h2>Score: <span id="score">0</span></h2> <!-- Displays the score -->
         </div>
     </div>
-    <!-- ... (Rest of the code) -->
+
+    <!-- Link to the JavaScript file -->
+    <script src="script.js"></script>
 </body>
+</html>
