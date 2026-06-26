@@ -3,31 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <title>Cascadia Simplified</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Ensures mobile compatibility -->
-    <link rel="stylesheet" href="styles.css"> <!-- Link to the CSS file -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <h1>Cascadia Simplified</h1>
 
-    <!-- Game Container for Board and Sidebar -->
     <div id="game-container">
-        <!-- Game Board -->
-        <div id="board"></div>
+        <!-- The active player's board -->
+        <div id="board" role="group" aria-label="Your habitat board"></div>
 
-        <!-- Sidebar for Draft Area, Score, and Player Info -->
+        <!-- Draft, scores, turn info, and controls -->
         <div id="sidebar">
-            <h2>Player <span id="player-number">1</span>'s Turn</h2> <!-- Displays current player -->
+            <h2 id="turn-heading">Player 1's Turn</h2>
 
-            <h2>Available Tiles and Tokens</h2>
-            <div id="draft-area"></div> <!-- This is where draft tiles and tokens will be shown -->
+            <div id="scores" aria-live="polite">
+                <span class="score-tag" data-player="0">Player 1: 0</span>
+                <span class="score-tag" data-player="1">Player 2: 0</span>
+            </div>
 
-            <button id="end-turn">End Turn</button> <!-- Button to end the player's turn -->
+            <p id="status" role="status" aria-live="polite"></p>
 
-            <h2>Score: <span id="score">0</span></h2> <!-- Displays the score -->
+            <h2>Draft</h2>
+            <div id="draft-area"></div>
+
+            <button id="end-turn" type="button">End Turn (Pass)</button>
+            <button id="new-game" type="button">New Game</button>
         </div>
     </div>
 
-    <!-- Link to the JavaScript file -->
     <script src="script.js"></script>
 </body>
 </html>

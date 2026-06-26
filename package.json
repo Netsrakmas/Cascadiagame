@@ -1,0 +1,9 @@
+{
+  "name": "cascadia-simplified",
+  "version": "1.0.0",
+  "description": "A simplified, single-page implementation of the Cascadia board game.",
+  "scripts": {
+    "test": "node script.test.js"
+  },
+  "license": "MIT"
+}

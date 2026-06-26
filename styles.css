@@ -25,12 +25,10 @@ h1, h2 {
 #board {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(5, 1fr);
     gap: 2px;
-    width: 90vw;
-    height: 90vw;
+    width: min(90vw, 70vh);
+    aspect-ratio: 1 / 1;
     max-width: 500px;
-    max-height: 500px;
     border: 2px solid #333;
 }
 
@@ -39,8 +37,14 @@ h1, h2 {
     height: 100%;
     position: relative;
     border: 1px solid #999;
-    box-sizing: border-box;
+    background: #f7f7f7;
+    padding: 0;
+    font: inherit;
     cursor: pointer;
+}
+
+.tile:disabled {
+    cursor: default;
 }
 
 .token {
@@ -50,6 +54,8 @@ h1, h2 {
     top: 20%;
     left: 20%;
     border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.45); /* keeps tokens visible over same-palette tiles */
+    box-sizing: border-box;
 }
 
 #sidebar {
@@ -58,21 +64,67 @@ h1, h2 {
     padding: 10px;
 }
 
+#scores {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: 6px 0;
+}
+
+.score-tag {
+    padding: 4px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.score-tag.active {
+    background: #0b6e3a;
+    color: #fff;
+    border-color: #0b6e3a;
+}
+
+#status {
+    min-height: 1.4em;
+    text-align: center;
+    margin: 6px 0;
+    color: #333;
+}
+
 #draft-area {
     display: flex;
     flex-wrap: wrap;
-    gap: 5%;
-    justify-content: space-between;
+    gap: 10px;
+    justify-content: space-around;
     margin-bottom: 10px;
 }
 
+.draft-column {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 30%;
+    padding: 4px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+}
+
+.draft-column.selected {
+    border-color: #0b6e3a;
+    background: #eaffea;
+}
+
 .draft-tile, .draft-token {
-    width: 45%;
-    height: 80px;
+    height: 48px;
     border: 1px solid #999;
+    border-radius: 4px;
     display: flex;
     justify-content: center;
     align-items: center;
+    font-size: 0.8em;
+    text-transform: capitalize;
+    color: #111;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff; /* readable label over any tile color */
     cursor: pointer;
 }
 
@@ -84,15 +136,34 @@ button {
     cursor: pointer;
 }
 
+#draft-area button,
+#board .tile {
+    width: auto;
+    margin-bottom: 0;
+}
+
+#board .tile {
+    width: 100%;
+}
+
+/* Visible keyboard focus for all interactive elements */
+.tile:focus-visible,
+.draft-tile:focus-visible,
+.draft-token:focus-visible,
+button:focus-visible {
+    outline: 3px solid #0b6e3a;
+    outline-offset: 2px;
+}
+
 @media (orientation: landscape) {
     #game-container {
         flex-direction: row;
         justify-content: center;
+        align-items: flex-start;
     }
 
     #board {
-        width: 45vw;
-        height: 45vw;
+        width: min(45vw, 90vh);
     }
 
     #sidebar {
