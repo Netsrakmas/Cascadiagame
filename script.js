@@ -8,6 +8,12 @@ const GRID = 5;
 const CELLS = GRID * GRID; // 25
 const TOTAL_PLAYERS = 2;
 const DRAFT_SIZE = 3;
+const BAG_COPIES = 13; // 13 * 5 = 65 of each, comfortably more than a full game needs
+
+// Comparative habitat scoring (Cascadia-style): per habitat, the player with the
+// larger largest-area takes the majority bonus; a tie splits the tie bonus.
+const HABITAT_MAJORITY_BONUS = 2;
+const HABITAT_TIE_BONUS = 1;
 
 const habitats = ['forest', 'wetland', 'prairie', 'mountain', 'river'];
 const wildlife = ['bear', 'salmon', 'hawk', 'fox', 'elk'];
@@ -130,10 +136,12 @@ function straightRuns(positions) {
     return runs;
 }
 
-// Score straight runs, claiming the longest runs first so each tile is counted
-// in at most one run (no double-counting across the horizontal/vertical axes).
+// Score straight runs, claiming runs in a deterministic order so each tile is
+// counted in at most one run (no double-counting across the two axes):
+// longest first, then topmost-leftmost start, then horizontal before vertical.
 function scoreRuns(positions, pointsPerTile) {
-    const runs = straightRuns(positions).sort((a, b) => b.length - a.length);
+    const runs = straightRuns(positions).sort(
+        (a, b) => (b.length - a.length) || (a[0] - b[0]) || ((a[1] - a[0]) - (b[1] - b[0])));
     const claimed = new Set();
     let points = 0;
     runs.forEach((run) => {
@@ -178,6 +186,13 @@ const wildlifeScorers = {
     elk: (board, positions) => scoreRuns(positions, 3),
 };
 
+// Wildlife-only score for a single board.
+function wildlifeScore(board) {
+    return wildlife.reduce(
+        (total, animal) => total + wildlifeScorers[animal](board, getAnimalPositions(board, animal)),
+        0);
+}
+
 function findContiguousAreas(board, habitat) {
     const sizes = [];
     const visited = new Set();
@@ -201,65 +216,117 @@ function findContiguousAreas(board, habitat) {
     return sizes;
 }
 
-// Each habitat contributes the size of its largest contiguous area.
-function calculateHabitatScore(board) {
-    return habitats.reduce(
-        (total, habitat) => total + Math.max(0, ...findContiguousAreas(board, habitat)), 0);
+function largestHabitatArea(board, habitat) {
+    return Math.max(0, ...findContiguousAreas(board, habitat));
 }
 
-// Total score for a single player's board.
-function calculateScore(board) {
-    let total = 0;
-    wildlife.forEach((animal) => {
-        total += wildlifeScorers[animal](board, getAnimalPositions(board, animal));
+// Competitive habitat bonus across all boards: per habitat, the player with the
+// strictly largest area takes HABITAT_MAJORITY_BONUS; a tie splits HABITAT_TIE_BONUS.
+function habitatBonuses(allBoards) {
+    const bonuses = allBoards.map(() => 0);
+    habitats.forEach((habitat) => {
+        const areas = allBoards.map((board) => largestHabitatArea(board, habitat));
+        const max = Math.max(...areas);
+        if (max === 0) return; // nobody has this habitat
+        const leaders = areas.reduce((acc, area, p) => (area === max ? [...acc, p] : acc), []);
+        if (leaders.length === 1) {
+            bonuses[leaders[0]] += HABITAT_MAJORITY_BONUS;
+        } else {
+            leaders.forEach((p) => { bonuses[p] += HABITAT_TIE_BONUS; });
+        }
     });
-    return total + calculateHabitatScore(board);
+    return bonuses;
 }
 
-// ---- Game state (one board and score per player) ----
+// Total score for one player: their wildlife score plus their share of the
+// comparative habitat bonus.
+function playerScore(allBoards, p) {
+    return wildlifeScore(allBoards[p]) + habitatBonuses(allBoards)[p];
+}
+
+// ---- Game state ----
 
 let boards = [];
 let scores = [];
 let currentPlayer = 0;
+let tileBag = [];
+let tokenBag = [];
 let draftTiles = [];
 let draftTokens = [];
 let selectedColumn = null;
+let turnPhase = 'tile';   // 'tile' = place a habitat; 'token' = place the drafted animal
+let pendingAnimal = null; // animal awaiting placement during the 'token' phase
 let gameOver = false;
+
+function buildBag(items, copies) {
+    const bag = [];
+    for (let c = 0; c < copies; c++) items.forEach((item) => bag.push(item));
+    return bag;
+}
+
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+function refillColumn(i) {
+    draftTiles[i] = tileBag.length ? tileBag.pop() : null;
+    draftTokens[i] = tokenBag.length ? tokenBag.pop() : null;
+}
 
 function initGame() {
     boards = Array.from({ length: TOTAL_PLAYERS }, () => new Array(CELLS).fill(null));
     scores = new Array(TOTAL_PLAYERS).fill(0);
     currentPlayer = 0;
+    tileBag = shuffle(buildBag(habitats, BAG_COPIES));
+    tokenBag = shuffle(buildBag(wildlife, BAG_COPIES));
+    draftTiles = [];
+    draftTokens = [];
+    for (let i = 0; i < DRAFT_SIZE; i++) refillColumn(i);
+    selectedColumn = null;
+    turnPhase = 'tile';
+    pendingAnimal = null;
     gameOver = false;
+    recomputeScores();
     buildBoard();
-    generateDraft();
-    setStatus('Select a habitat/animal pair, then tap a cell on your board.');
+    setStatus('Select a habitat/animal pair, then tap a cell to place the habitat.');
     renderAll();
 }
 
-// ---- Game flow ----
-
-function generateDraft() {
-    draftTiles = [];
-    draftTokens = [];
-    for (let i = 0; i < DRAFT_SIZE; i++) {
-        draftTiles.push(habitats[Math.floor(Math.random() * habitats.length)]);
-        draftTokens.push(wildlife[Math.floor(Math.random() * wildlife.length)]);
-    }
-    selectedColumn = null;
+function recomputeScores() {
+    const bonuses = habitatBonuses(boards);
+    scores = boards.map((board, p) => wildlifeScore(board) + bonuses[p]);
 }
+
+// ---- Turn flow ----
 
 function selectDraft(i) {
-    if (gameOver) return;
+    if (gameOver || turnPhase !== 'tile' || draftTiles[i] == null) return;
     selectedColumn = i;
-    setStatus(`Selected ${draftTiles[i]} + ${draftTokens[i]}. Tap a cell to place it.`);
-    renderDraft();
+    setStatus(`Selected ${draftTiles[i]} + ${draftTokens[i]}. Tap a cell to place the habitat.`);
+    renderAll();
 }
 
-function placeTile(index) {
-    if (gameOver) return;
-    const board = boards[currentPlayer];
+function isTokenTarget(index, animal) {
+    const tile = boards[currentPlayer][index];
+    return Boolean(tile) && tile.animal == null && canPlaceAnimal(tile.habitat, animal);
+}
 
+function hasTokenTarget(animal) {
+    return boards[currentPlayer].some((_, i) => isTokenTarget(i, animal));
+}
+
+function handleCell(index) {
+    if (gameOver) return;
+    if (turnPhase === 'tile') placeHabitat(index);
+    else placeToken(index);
+}
+
+function placeHabitat(index) {
+    const board = boards[currentPlayer];
     if (selectedColumn === null) {
         setStatus('Select a habitat/animal pair from the draft first.');
         return;
@@ -271,38 +338,65 @@ function placeTile(index) {
 
     const habitat = draftTiles[selectedColumn];
     const animal = draftTokens[selectedColumn];
-    const animalFits = canPlaceAnimal(habitat, animal);
+    board[index] = { habitat, animal: null };
+    pendingAnimal = animal;
+    refillColumn(selectedColumn);
+    selectedColumn = null;
+    recomputeScores();
 
-    // Only record the animal when it can legally live on the habitat, so the
-    // stored state always matches what is drawn and scored.
-    board[index] = { habitat, animal: animalFits ? animal : null };
-    scores[currentPlayer] = calculateScore(board);
+    if (hasTokenTarget(pendingAnimal)) {
+        turnPhase = 'token';
+        const homes = PLACEMENT_RULES[pendingAnimal].join(' or ');
+        setStatus(`Placed ${habitat}. Now place the ${pendingAnimal} on a ${homes} tile, or skip it.`);
+        renderAll();
+    } else {
+        setStatus(`Placed ${habitat}. No legal home for the ${pendingAnimal} — token discarded.`);
+        finishPlacement();
+    }
+}
 
-    setStatus(animalFits
-        ? `Placed ${habitat} with ${animal}.`
-        : `Placed ${habitat}. ${animal} can't live there, so the token was discarded.`);
+function placeToken(index) {
+    if (!isTokenTarget(index, pendingAnimal)) {
+        setStatus(`The ${pendingAnimal} can't go there. Choose a highlighted tile or skip it.`);
+        return;
+    }
+    boards[currentPlayer][index].animal = pendingAnimal;
+    setStatus(`Placed the ${pendingAnimal}.`);
+    recomputeScores();
+    finishPlacement();
+}
 
+function finishPlacement() {
+    pendingAnimal = null;
+    turnPhase = 'tile';
     advanceTurn();
 }
 
 function passTurn() {
     if (gameOver) return;
-    setStatus(`Player ${currentPlayer + 1} passed.`);
-    advanceTurn();
+    if (turnPhase === 'token') {
+        setStatus(`${pendingAnimal} skipped.`);
+        finishPlacement();
+    } else {
+        setStatus(`Player ${currentPlayer + 1} passed.`);
+        advanceTurn();
+    }
 }
 
 function advanceTurn() {
-    if (boards.every((b) => b.every((cell) => cell !== null))) {
+    if (boards.every((board) => board.every((cell) => cell !== null))) {
         finishGame();
         return;
     }
     currentPlayer = (currentPlayer + 1) % TOTAL_PLAYERS;
-    generateDraft();
+    selectedColumn = null;
+    turnPhase = 'tile';
     renderAll();
 }
 
 function finishGame() {
     gameOver = true;
+    recomputeScores();
     const max = Math.max(...scores);
     const winners = scores.reduce((acc, s, p) => (s === max ? [...acc, p + 1] : acc), []);
     setStatus(winners.length === 1
@@ -322,7 +416,7 @@ function buildBoard() {
         cell.className = 'tile';
         cell.dataset.index = String(i);
         // Buttons handle click, keyboard, and touch natively — no double-firing.
-        cell.addEventListener('click', () => placeTile(i));
+        cell.addEventListener('click', () => handleCell(i));
         boardEl.appendChild(cell);
     }
 }
@@ -332,6 +426,7 @@ function renderBoard() {
     document.querySelectorAll('#board .tile').forEach((cell, i) => {
         const tile = board[i];
         cell.innerHTML = '';
+        cell.classList.remove('target');
         if (tile) {
             cell.style.backgroundColor = habitatColor(tile.habitat);
             let label = tile.habitat;
@@ -347,19 +442,36 @@ function renderBoard() {
             cell.style.backgroundColor = '';
             cell.setAttribute('aria-label', `Cell ${i + 1}: empty`);
         }
-        cell.disabled = gameOver || Boolean(tile);
+
+        let enabled;
+        if (gameOver) {
+            enabled = false;
+        } else if (turnPhase === 'tile') {
+            enabled = !tile && selectedColumn !== null;
+        } else {
+            enabled = isTokenTarget(i, pendingAnimal);
+            if (enabled) cell.classList.add('target');
+        }
+        cell.disabled = !enabled;
     });
 }
 
 function renderDraft() {
     const area = document.getElementById('draft-area');
     area.innerHTML = '';
+    const draftDisabled = gameOver || turnPhase === 'token';
+
     for (let i = 0; i < draftTiles.length; i++) {
         const habitat = draftTiles[i];
         const animal = draftTokens[i];
-
         const column = document.createElement('div');
         column.className = 'draft-column' + (selectedColumn === i ? ' selected' : '');
+
+        if (habitat == null) {
+            column.classList.add('empty');
+            area.appendChild(column);
+            continue;
+        }
 
         const tileBtn = document.createElement('button');
         tileBtn.type = 'button';
@@ -368,7 +480,7 @@ function renderDraft() {
         tileBtn.textContent = habitat;
         tileBtn.setAttribute('aria-pressed', String(selectedColumn === i));
         tileBtn.setAttribute('aria-label', `Draft ${i + 1}: ${habitat} habitat with ${animal}`);
-        tileBtn.disabled = gameOver;
+        tileBtn.disabled = draftDisabled;
         tileBtn.addEventListener('click', () => selectDraft(i));
 
         const tokenBtn = document.createElement('button');
@@ -379,7 +491,7 @@ function renderDraft() {
         tokenBtn.setAttribute('aria-pressed', String(selectedColumn === i));
         tokenBtn.setAttribute('aria-label',
             `${animal} token — lives on ${PLACEMENT_RULES[animal].join(' or ')}`);
-        tokenBtn.disabled = gameOver;
+        tokenBtn.disabled = draftDisabled;
         tokenBtn.addEventListener('click', () => selectDraft(i));
 
         column.appendChild(tileBtn);
@@ -405,7 +517,9 @@ function renderAll() {
     renderDraft();
     renderScores();
     renderHeading();
-    document.getElementById('end-turn').disabled = gameOver;
+    const endBtn = document.getElementById('end-turn');
+    endBtn.textContent = turnPhase === 'token' ? 'Skip Token' : 'End Turn (Pass)';
+    endBtn.disabled = gameOver;
 }
 
 function setStatus(message) {
@@ -424,7 +538,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         GRID, CELLS, habitats, wildlife,
         canPlaceAnimal, getAdjacentIndices, getAnimalPositions,
-        findGroups, straightRuns, scoreRuns, isIsolated,
-        adjacentSpeciesVariety, calculateHabitatScore, calculateScore,
+        findGroups, straightRuns, scoreRuns, isIsolated, adjacentSpeciesVariety,
+        wildlifeScore, findContiguousAreas, largestHabitatArea, habitatBonuses, playerScore,
     };
 }

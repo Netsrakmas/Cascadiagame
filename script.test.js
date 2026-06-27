@@ -98,18 +98,50 @@ test('fox diversity counts other species but not adjacent foxes', () => {
 });
 
 // --- habitat largest area ---
-test('habitat score uses the largest contiguous area per habitat', () => {
+test('largestHabitatArea returns the biggest contiguous area per habitat', () => {
     const b = emptyBoard();
     [0, 1, 2].forEach((i) => put(b, i, 'forest')); // area of 3
     put(b, 10, 'forest');                           // isolated area of 1
-    assert.strictEqual(g.calculateHabitatScore(b), 3);
+    assert.strictEqual(g.largestHabitatArea(b, 'forest'), 3);
+    assert.strictEqual(g.largestHabitatArea(b, 'river'), 0);
 });
 
-// --- end-to-end score ---
-test('calculateScore combines wildlife and habitat scoring', () => {
+// --- wildlife-only score ---
+test('wildlifeScore sums only wildlife, not habitat', () => {
     const b = emptyBoard();
-    [0, 1].forEach((i) => put(b, i, 'forest', 'bear')); // habitat 2, bears (group of 2) 0
-    assert.strictEqual(g.calculateScore(b), 2);
+    [0, 1, 2].forEach((i) => put(b, i, 'forest', 'bear')); // bear group of 3 -> 9
+    assert.strictEqual(g.wildlifeScore(b), 9); // no habitat points included
+});
+
+// --- competitive habitat bonus ---
+test('habitat bonus: the strictly larger area takes the majority bonus', () => {
+    const b0 = emptyBoard();
+    [0, 1, 2].forEach((i) => put(b0, i, 'forest')); // area 3
+    const b1 = emptyBoard();
+    [0, 1].forEach((i) => put(b1, i, 'forest'));    // area 2
+    assert.deepStrictEqual(g.habitatBonuses([b0, b1]), [2, 0]);
+});
+
+test('habitat bonus: a tie splits the tie bonus', () => {
+    const b0 = emptyBoard();
+    [0, 1].forEach((i) => put(b0, i, 'river'));
+    const b1 = emptyBoard();
+    [0, 1].forEach((i) => put(b1, i, 'river'));
+    assert.deepStrictEqual(g.habitatBonuses([b0, b1]), [1, 1]);
+});
+
+test('habitat bonus: a habitat nobody has awards nothing', () => {
+    assert.deepStrictEqual(g.habitatBonuses([emptyBoard(), emptyBoard()]), [0, 0]);
+});
+
+test('playerScore combines wildlife and the comparative habitat bonus', () => {
+    const b0 = emptyBoard();
+    [0, 1, 2].forEach((i) => put(b0, i, 'forest', 'bear')); // bears 9, forest area 3
+    const b1 = emptyBoard();
+    [5].forEach((i) => put(b1, i, 'forest'));               // forest area 1
+    // b0 wins the forest majority (+2): 9 + 2 = 11; b1: 0 wildlife + 0 (loses forest) = 0
+    assert.strictEqual(g.playerScore([b0, b1], 0), 11);
+    assert.strictEqual(g.playerScore([b0, b1], 1), 0);
 });
 
 console.log(`\n${passed} tests passed.`);
