@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/codebase-review-vuhsf4
   workflow_dispatch:
 
 # Permissions required for the deploy-pages action.

@@ -7,6 +7,8 @@ tokens, then scores them with per-animal patterns and competitive habitat bonuse
 
 It is a single static page — plain HTML, CSS, and JavaScript with no build step.
 
+**▶ Play online:** https://netsrakmas.github.io/Cascadiagame/ (works on mobile)
+
 ## Play
 
 Open `index.html` in any modern browser, or serve the folder:
