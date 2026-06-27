@@ -11,6 +11,8 @@
     const TOTAL_PLAYERS = 2;
     const DRAFT_SIZE = 3;
     const BAG_COPIES = 13; // 13 * 5 = 65 of each, comfortably more than a full game needs
+    const STORAGE_KEY = 'cascadia-simplified';
+    const STATE_VERSION = 1; // bump to invalidate incompatible saved games
 
     // Comparative habitat scoring (Cascadia-style): per habitat, the player with the
     // larger largest-area takes the majority bonus; a tie splits the tie bonus.
@@ -279,7 +281,7 @@
         draftTokens[i] = tokenBag.length ? tokenBag.pop() : null;
     }
 
-    function initGame() {
+    function newGame() {
         boards = Array.from({ length: TOTAL_PLAYERS }, () => new Array(CELLS).fill(null));
         scores = new Array(TOTAL_PLAYERS).fill(0);
         currentPlayer = 0;
@@ -295,6 +297,46 @@
         recomputeScores();
         buildBoard();
         setStatus('Select a habitat/animal pair, then tap a cell to place the habitat.');
+        renderAll();
+    }
+
+    // ---- Persistence (localStorage; browser only, fails soft) ----
+
+    function saveState() {
+        if (typeof localStorage === 'undefined') return;
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                v: STATE_VERSION,
+                boards, scores, currentPlayer, tileBag, tokenBag,
+                draftTiles, draftTokens, selectedColumn, turnPhase, pendingAnimal, gameOver,
+            }));
+        } catch {
+            // Storage unavailable, full, or blocked — keep playing in-memory.
+        }
+    }
+
+    function loadState() {
+        if (typeof localStorage === 'undefined') return null;
+        let saved;
+        try {
+            saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        } catch {
+            return null;
+        }
+        if (!saved || saved.v !== STATE_VERSION) return null;
+        const validBoards = Array.isArray(saved.boards)
+            && saved.boards.length === TOTAL_PLAYERS
+            && saved.boards.every((b) => Array.isArray(b) && b.length === CELLS);
+        return validBoards ? saved : null;
+    }
+
+    function restoreGame(saved) {
+        ({
+            boards, scores, currentPlayer, tileBag, tokenBag,
+            draftTiles, draftTokens, selectedColumn, turnPhase, pendingAnimal, gameOver,
+        } = saved);
+        buildBoard();
+        setStatus(gameOver ? endMessage() : `Game restored — Player ${currentPlayer + 1}'s turn.`);
         renderAll();
     }
 
@@ -396,14 +438,18 @@
         renderAll();
     }
 
+    function endMessage() {
+        const max = Math.max(...scores);
+        const winners = scores.reduce((acc, s, p) => (s === max ? [...acc, p + 1] : acc), []);
+        return winners.length === 1
+            ? `Game over — Player ${winners[0]} wins with ${max} points!`
+            : `Game over — tie at ${max} points between players ${winners.join(' & ')}.`;
+    }
+
     function finishGame() {
         gameOver = true;
         recomputeScores();
-        const max = Math.max(...scores);
-        const winners = scores.reduce((acc, s, p) => (s === max ? [...acc, p + 1] : acc), []);
-        setStatus(winners.length === 1
-            ? `Game over — Player ${winners[0]} wins with ${max} points!`
-            : `Game over — tie at ${max} points between players ${winners.join(' & ')}.`);
+        setStatus(endMessage());
         renderAll();
     }
 
@@ -522,6 +568,7 @@
         const endBtn = document.getElementById('end-turn');
         endBtn.textContent = turnPhase === 'token' ? 'Skip Token' : 'End Turn (Pass)';
         endBtn.disabled = gameOver;
+        saveState();
     }
 
     function setStatus(message) {
@@ -532,8 +579,10 @@
 
     if (typeof document !== 'undefined') {
         document.getElementById('end-turn').addEventListener('click', passTurn);
-        document.getElementById('new-game').addEventListener('click', initGame);
-        initGame();
+        document.getElementById('new-game').addEventListener('click', newGame);
+        const saved = loadState();
+        if (saved) restoreGame(saved);
+        else newGame();
     }
 
     if (typeof module !== 'undefined' && module.exports) {

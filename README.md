@@ -34,6 +34,10 @@ The game is a local hot-seat for two players, each with their own board and scor
 The game ends when both boards are full; the higher total score wins (ties are
 reported). **New Game** resets everything.
 
+Your progress is saved automatically to the browser's `localStorage`, so closing
+the tab or refreshing mid-game restores the boards, scores, draft, and whose
+turn it is. **New Game** clears the saved game.
+
 ### Where each animal lives
 
 | Animal | Habitats |
@@ -72,6 +76,9 @@ Habitat (competitive, compared between players):
 npm test     # run the scoring unit tests (node, no dependencies)
 npm run lint # run ESLint (requires `npm install` first to fetch eslint)
 ```
+
+Both run automatically in CI (GitHub Actions) on every push and pull request —
+see `.github/workflows/ci.yml`.
 
 ### Project structure
 

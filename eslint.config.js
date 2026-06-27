@@ -11,6 +11,7 @@ module.exports = [
                 // Browser
                 document: 'readonly',
                 window: 'readonly',
+                localStorage: 'readonly',
                 // Node (test runner + module export guard)
                 module: 'writable',
                 require: 'readonly',
