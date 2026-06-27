@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "A simplified, single-page implementation of the Cascadia board game.",
   "scripts": {
-    "test": "node script.test.js"
+    "test": "node script.test.js",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
   },
   "license": "MIT"
 }
